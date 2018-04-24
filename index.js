@@ -24,17 +24,50 @@ exports.getPreview = function(text, options) {
       }
     });
 
+    const headers = new Headers();
+    headers.append('Accept', 'text/html');
+
     if (detectedUrl) {
-      fetch(detectedUrl)
-        .then(response => response.text())
-        .then(text => {
-          resolve(parseResponse(text, detectedUrl, options || {}));
+      fetch(detectedUrl, { headers })
+        .then(response => preParse(response, detectedUrl))
+        .then(preParse => {
+          if (preParse.url){
+            resolve(preParse);
+          } else {
+            resolve(parseResponse(preParse, detectedUrl, options || {}));
+          };
+        }, (reason) => {
+          reject({ error: 'React-Native-Preview-Link did not find a link in the text' });
         })
-        .catch(error => reject({ error }));
+        .catch(error => {
+          reject({ error });
+        });
     } else {
       reject({
         error: 'React-Native-Preview-Link did not find a link in the text'
       });
+    }
+  });
+};
+
+const preParse = function (response, url) {
+  return new Promise((resolve, reject) => {
+    let r = null;
+    try {
+      response.headers.forEach(header => {
+        if (header.startsWith('image/')) {
+          r = { url, images: [url], title: '', description: '', videos: [], mediaType: header };
+        }
+      });
+      if (r){
+        resolve(r);
+      } else if (!response._bodyInit){
+        reject({ error: 'No links' });
+      } else {
+        response.text().then(text => resolve(text));
+      }
+    } catch (e) {
+      reject({error: 'No data for this link'});
     }
   });
 };
